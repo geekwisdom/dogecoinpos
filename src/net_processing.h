@@ -46,11 +46,12 @@ static const unsigned int DEFAULT_CLEANBLOCKINDEXTIMEOUT = 600;
 class PeerLogicValidation final : public CValidationInterface, public NetEventsInterface {
 private:
     CConnman* const connman;
+    /** Pointer to this node's banman. May be nullptr - check existence before dereferencing. */
     BanMan* const m_banman;
     ChainstateManager& m_chainman;
     CTxMemPool& m_mempool;
 
-    bool MaybeDiscourageAndDisconnect(CNode& pnode) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    bool MaybeDiscourageAndDisconnect(CNode& pnode);
 
 public:
     PeerLogicValidation(CConnman* connman, BanMan* banman, CScheduler& scheduler, ChainstateManager& chainman, CTxMemPool& pool);
@@ -119,7 +120,7 @@ bool GetNodeStateStats(NodeId nodeid, CNodeStateStats &stats);
 bool ProcessNetBlock(ChainstateManager& chainman, const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode& pfrom, CConnman& connman);
 
 /** Relay transaction to every node */
-void RelayTransaction(const uint256&, const CConnman& connman);
+void RelayTransaction(const uint256& txid, const uint256& wtxid, const CConnman& connman) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
 /** Clean block index */
 void CleanBlockIndex();

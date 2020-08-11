@@ -32,7 +32,7 @@ uint256 ComputeStakeModifier(const CBlockIndex* pindexPrev, const uint256& kerne
 
     CDataStream ss(SER_GETHASH, 0);
     ss << kernel << pindexPrev->nStakeModifier;
-    return Hash(ss.begin(), ss.end());
+    return Hash(ss);
 }
 
 // BPS kernel protocol
@@ -76,7 +76,7 @@ bool CheckStakeKernelHash(CBlockIndex* pindexPrev, unsigned int nBits, uint32_t 
     CDataStream ss(SER_GETHASH, 0);
     ss << nStakeModifier;
     ss << blockFromTime << prevout.hash << prevout.n << nTimeBlock;
-    hashProofOfStake = Hash(ss.begin(), ss.end());
+    hashProofOfStake = Hash(ss);
 
     if (fPrintProofOfStake) {
         LogPrint(BCLog::COINSTAKE, "CheckStakeKernelHash() : check modifier=%s nTimeBlockFrom=%u nPrevout=%u nTimeBlock=%u hashProof=%s\n",

@@ -66,6 +66,11 @@ public:
     //! Choose network parameters.
     virtual void selectParams(const std::string& network) = 0;
 
+    //! Read and update <datadir>/settings.json file with saved settings. This
+    //! needs to be called after selectParams() because the settings file
+    //! location is network-specific.
+    virtual bool initSettings(std::string& error) = 0;
+
     //! Get the (assumed) blockchain size.
     virtual uint64_t getAssumedBlockchainSize() = 0;
 
@@ -278,12 +283,14 @@ public:
         std::function<void(SynchronizationState, interfaces::BlockTip tip, double verification_progress)>;
     virtual std::unique_ptr<Handler> handleNotifyHeaderTip(NotifyHeaderTipFn fn) = 0;
 
-    //! Return pointer to internal chain interface, useful for testing.
+    //! Get and set internal node context. Useful for testing, but not
+    //! accessible across processes.
     virtual NodeContext* context() { return nullptr; }
+    virtual void setContext(NodeContext* context) { }
 };
 
 //! Return implementation of Node interface.
-std::unique_ptr<Node> MakeNode();
+std::unique_ptr<Node> MakeNode(NodeContext* context = nullptr);
 
 //! Block tip (could be a header or not, depends on the subscribed signal).
 struct BlockTip {
