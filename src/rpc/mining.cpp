@@ -124,11 +124,8 @@ static bool GenerateBlock(ChainstateManager& chainman, CBlock& block, uint64_t& 
         ++block.nNonce;
         --max_tries;
     }
-    if (ShutdownRequested()) {
+    if (max_tries == 0 || ShutdownRequested()) {
         return false;
-    }
-    if (max_tries == 0) {
-        return true;
     }
     if (block.nNonce == std::numeric_limits<uint32_t>::max()) {
         return true;
@@ -157,14 +154,13 @@ static UniValue generateBlocks(ChainstateManager& chainman, const CTxMemPool& me
     UniValue blockHashes(UniValue::VARR);
     while (nHeight < nHeightEnd && !ShutdownRequested())
     {
-        uint64_t maxTries = nMaxTries;
-        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(mempool, Params()).CreateNewBlock(coinbase_script, false, nullptr, 0, GetAdjustedTime()+POW_MINER_MAX_TIME));
+        std::unique_ptr<CBlockTemplate> pblocktemplate(BlockAssembler(mempool, Params()).CreateNewBlock(coinbase_script));
         if (!pblocktemplate.get())
             throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't create new block");
         CBlock *pblock = &pblocktemplate->block;
 
         uint256 block_hash;
-        if (!GenerateBlock(chainman, *pblock, maxTries, nExtraNonce, block_hash)) {
+        if (!GenerateBlock(chainman, *pblock, nMaxTries, nExtraNonce, block_hash)) {
             break;
         }
 
