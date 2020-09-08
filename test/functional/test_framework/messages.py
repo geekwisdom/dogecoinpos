@@ -32,7 +32,7 @@ from test_framework.util import hex_str_to_bytes, assert_equal
 
 MIN_VERSION_SUPPORTED = 60001
 MY_VERSION = 70016  # past wtxid relay
-MY_SUBVERSION = b"/python-mininode-tester:0.0.3/"
+MY_SUBVERSION = b"/python-p2p-tester:0.0.3/"
 MY_RELAY = 1 # from version 70001 onwards, fRelay should be appended to version messages (BIP37)
 
 MAX_LOCATOR_SZ = 101
@@ -63,6 +63,7 @@ MSG_CMPCT_BLOCK = 4
 MSG_WTX = 5
 MSG_WITNESS_FLAG = 1 << 30
 MSG_TYPE_MASK = 0xffffffff >> 2
+MSG_WITNESS_TX = MSG_TX | MSG_WITNESS_FLAG
 
 FILTER_TYPE_BASIC = 0
 
@@ -244,8 +245,8 @@ class CInv:
         MSG_TX | MSG_WITNESS_FLAG: "WitnessTx",
         MSG_BLOCK | MSG_WITNESS_FLAG: "WitnessBlock",
         MSG_FILTERED_BLOCK: "filtered Block",
-        4: "CompactBlock",
-        5: "WTX",
+        MSG_CMPCT_BLOCK: "CompactBlock",
+        MSG_WTX: "WTX",
     }
 
     def __init__(self, t=0, h=0):
@@ -253,12 +254,12 @@ class CInv:
         self.hash = h
 
     def deserialize(self, f):
-        self.type = struct.unpack("<i", f.read(4))[0]
+        self.type = struct.unpack("<I", f.read(4))[0]
         self.hash = deser_uint256(f)
 
     def serialize(self):
         r = b""
-        r += struct.pack("<i", self.type)
+        r += struct.pack("<I", self.type)
         r += ser_uint256(self.hash)
         return r
 

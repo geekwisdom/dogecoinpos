@@ -11,6 +11,12 @@ from decimal import Decimal
 from itertools import product
 import time
 
+from test_framework.p2p import P2PInterface
+import test_framework.messages
+from test_framework.messages import (
+    NODE_NETWORK,
+    NODE_WITNESS,
+)
 from test_framework.test_framework import BitcoinTestFramework
 from test_framework.util import (
     assert_approx,
@@ -20,13 +26,6 @@ from test_framework.util import (
     assert_raises_rpc_error,
     connect_nodes,
     p2p_port,
-    wait_until,
-)
-from test_framework.mininode import P2PInterface
-import test_framework.messages
-from test_framework.messages import (
-    NODE_NETWORK,
-    NODE_WITNESS,
 )
 
 
@@ -93,8 +92,8 @@ class NetTest(BitcoinTestFramework):
         # the bytes sent/received should change
         # note ping and pong are 32 bytes each
         self.nodes[0].ping()
-        wait_until(lambda: (self.nodes[0].getnettotals()['totalbytessent'] >= net_totals_after['totalbytessent'] + 32 * 2), timeout=1)
-        wait_until(lambda: (self.nodes[0].getnettotals()['totalbytesrecv'] >= net_totals_after['totalbytesrecv'] + 32 * 2), timeout=1)
+        self.wait_until(lambda: (self.nodes[0].getnettotals()['totalbytessent'] >= net_totals_after['totalbytessent'] + 32 * 2), timeout=1)
+        self.wait_until(lambda: (self.nodes[0].getnettotals()['totalbytesrecv'] >= net_totals_after['totalbytesrecv'] + 32 * 2), timeout=1)
 
         peer_info_after_ping = self.nodes[0].getpeerinfo()
         for before, after in zip(peer_info, peer_info_after_ping):
@@ -103,14 +102,17 @@ class NetTest(BitcoinTestFramework):
 
     def test_getnetworkinfo(self):
         self.log.info("Test getnetworkinfo")
-        assert_equal(self.nodes[0].getnetworkinfo()['networkactive'], True)
-        assert_equal(self.nodes[0].getnetworkinfo()['connections'], 2)
+        info = self.nodes[0].getnetworkinfo()
+        assert_equal(info['networkactive'], True)
+        assert_equal(info['connections'], 2)
+        assert_equal(info['connections_in'], 1)
+        assert_equal(info['connections_out'], 1)
 
         with self.nodes[0].assert_debug_log(expected_msgs=['SetNetworkActive: false\n']):
             self.nodes[0].setnetworkactive(state=False)
         assert_equal(self.nodes[0].getnetworkinfo()['networkactive'], False)
         # Wait a bit for all sockets to close
-        wait_until(lambda: self.nodes[0].getnetworkinfo()['connections'] == 0, timeout=3)
+        self.wait_until(lambda: self.nodes[0].getnetworkinfo()['connections'] == 0, timeout=3)
 
         with self.nodes[0].assert_debug_log(expected_msgs=['SetNetworkActive: true\n']):
             self.nodes[0].setnetworkactive(state=True)
@@ -118,8 +120,11 @@ class NetTest(BitcoinTestFramework):
         connect_nodes(self.nodes[0], 1)
         connect_nodes(self.nodes[1], 0)
 
-        assert_equal(self.nodes[0].getnetworkinfo()['networkactive'], True)
-        assert_equal(self.nodes[0].getnetworkinfo()['connections'], 2)
+        info = self.nodes[0].getnetworkinfo()
+        assert_equal(info['networkactive'], True)
+        assert_equal(info['connections'], 2)
+        assert_equal(info['connections_in'], 1)
+        assert_equal(info['connections_out'], 1)
 
         # check the `servicesnames` field
         network_info = [node.getnetworkinfo() for node in self.nodes]
