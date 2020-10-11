@@ -46,6 +46,7 @@ static const int TOOLTIP_WRAP_THRESHOLD = 80;
 #define QAPP_ORG_DOMAIN "bitcoinpos.net"
 #define QAPP_APP_NAME_DEFAULT "Bitcoin-POS-Qt"
 #define QAPP_APP_NAME_TESTNET "Bitcoin-POS-Qt-testnet"
+#define QAPP_APP_NAME_SIGNET "Bitcoin-POS-Qt-signet"
 #define QAPP_APP_NAME_REGTEST "Bitcoin-POS-Qt-regtest"
 
 /* One gigabyte (GB) in bytes */

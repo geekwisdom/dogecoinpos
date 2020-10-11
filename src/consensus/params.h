@@ -108,6 +108,13 @@ struct Params {
     int nEnableHeaderSignatureHeight;
     /** Block sync-checkpoint span*/
     int nCheckpointSpan;
+
+    /**
+     * If true, witness commitments contain a payload equal to a Bitcoin Script solution
+     * to the signet challenge. See BIP325.
+     */
+    bool signet_blocks{false};
+    std::vector<uint8_t> signet_challenge;
 };
 } // namespace Consensus
 

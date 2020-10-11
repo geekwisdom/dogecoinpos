@@ -71,6 +71,7 @@ TEST_FRAMEWORK_MODULES = [
     "blocktools",
     "muhash",
     "script",
+    "segwit_addr",
     "util",
 ]
 
@@ -154,6 +155,7 @@ BASE_SCRIPTS = [
     'feature_proxy.py',
     'rpc_signrawtransaction.py',
     'wallet_groups.py',
+    'p2p_addrv2_relay.py',
     'p2p_disconnect_ban.py',
     'rpc_decodescript.py',
     'rpc_blockchain.py',
@@ -208,6 +210,7 @@ BASE_SCRIPTS = [
     'rpc_bind.py --ipv6',
     'rpc_bind.py --nonloopback',
     'mining_basic.py',
+    'feature_signet.py',
     'wallet_bumpfee.py',
     'wallet_implicitsegwit.py',
     'rpc_named_arguments.py',
@@ -250,7 +253,7 @@ BASE_SCRIPTS = [
     'feature_config_args.py',
     'feature_settings.py',
     'rpc_getdescriptorinfo.py',
-    'rpc_getpeerinfo_banscore_deprecation.py',
+    'rpc_getpeerinfo_deprecation.py',
     'rpc_help.py',
     'feature_help.py',
     'feature_shutdown.py',

@@ -89,7 +89,6 @@ from test_framework.util import (
 
 # The versionbit bit used to signal activation of SegWit
 VB_WITNESS_BIT = 1
-VB_PERIOD = 144
 VB_TOP_BITS = 0x20000000
 
 MAX_SIGOP_COST = 80000
@@ -2097,14 +2096,14 @@ class SegWitTest(BitcoinTestFramework):
         tx = FromHex(CTransaction(), raw)
         assert_raises_rpc_error(-22, "TX decode failed", self.nodes[0].decoderawtransaction, serialize_with_bogus_witness(tx).hex())
         with self.nodes[0].assert_debug_log(['Superfluous witness record']):
-            self.nodes[0].p2p.send_and_ping(msg_bogus_tx(tx))
+            self.test_node.send_and_ping(msg_bogus_tx(tx))
         raw = self.nodes[0].signrawtransactionwithwallet(raw)
         assert raw['complete']
         raw = raw['hex']
         tx = FromHex(CTransaction(), raw)
         assert_raises_rpc_error(-22, "TX decode failed", self.nodes[0].decoderawtransaction, serialize_with_bogus_witness(tx).hex())
         with self.nodes[0].assert_debug_log(['Unknown transaction optional data']):
-            self.nodes[0].p2p.send_and_ping(msg_bogus_tx(tx))
+            self.test_node.send_and_ping(msg_bogus_tx(tx))
 
     @subtest  # type: ignore
     def test_wtxid_relay(self):
