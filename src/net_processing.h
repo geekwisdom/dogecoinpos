@@ -10,6 +10,7 @@
 #include <consensus/params.h>
 #include <net.h>
 #include <sync.h>
+#include <txrequest.h>
 #include <validationinterface.h>
 #include <chainparams.h>
 
@@ -74,7 +75,7 @@ public:
     /** Initialize a peer by adding it to mapNodeState and pushing a message requesting its version */
     void InitializeNode(CNode* pnode) override;
     /** Handle removal of a peer by updating various state and removing it from mapNodeState */
-    void FinalizeNode(NodeId nodeid, bool& fUpdateConnectionTime) override;
+    void FinalizeNode(const CNode& node, bool& fUpdateConnectionTime) override;
     /**
     * Process protocol messages received from a given node
     *
@@ -148,6 +149,12 @@ private:
     bool ProcessNetBlock(ChainstateManager& chainman, const CChainParams& chainparams, const std::shared_ptr<const CBlock> pblock, bool fForceProcessing, bool* fNewBlock, CNode& pfrom, CConnman& connman);
 
     bool ProcessNetBlockHeaders(ChainstateManager& chainman, CNode& pfrom, const std::vector<CBlockHeader>& block, BlockValidationState& state, const CChainParams& chainparams, const CBlockIndex** ppindex=nullptr, CBlockHeader *first_invalid=nullptr);
+    
+    /** Register with TxRequestTracker that an INV has been received from a
+     *  peer. The announcement parameters are decided in PeerManager and then
+     *  passed to TxRequestTracker. */
+    void AddTxAnnouncement(const CNode& node, const GenTxid& gtxid, std::chrono::microseconds current_time)
+        EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
     const CChainParams& m_chainparams;
     CConnman& m_connman;
@@ -155,6 +162,7 @@ private:
     BanMan* const m_banman;
     ChainstateManager& m_chainman;
     CTxMemPool& m_mempool;
+    TxRequestTracker m_txrequest GUARDED_BY(::cs_main);
 
     int64_t m_stale_tip_check_time; //!< Next time to check for stale tip
 };

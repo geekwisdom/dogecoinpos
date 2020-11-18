@@ -255,10 +255,14 @@ bool CNetAddr::SetSpecial(const std::string& str)
         Span<const uint8_t> input_checksum{input.data() + ADDR_TORV3_SIZE, torv3::CHECKSUM_LEN};
         Span<const uint8_t> input_version{input.data() + ADDR_TORV3_SIZE + torv3::CHECKSUM_LEN, sizeof(torv3::VERSION)};
 
+        if (input_version != torv3::VERSION) {
+            return false;
+        }
+
         uint8_t calculated_checksum[torv3::CHECKSUM_LEN];
         torv3::Checksum(input_pubkey, calculated_checksum);
 
-        if (input_checksum != calculated_checksum || input_version != torv3::VERSION) {
+        if (input_checksum != calculated_checksum) {
             return false;
         }
 
@@ -649,7 +653,7 @@ uint32_t CNetAddr::GetLinkedIPv4() const
     assert(false);
 }
 
-uint32_t CNetAddr::GetNetClass() const
+Network CNetAddr::GetNetClass() const
 {
     // Make sure that if we return NET_IPV6, then IsIPv6() is true. The callers expect that.
 
@@ -1107,6 +1111,17 @@ std::string CSubNet::ToString() const
 bool CSubNet::IsValid() const
 {
     return valid;
+}
+
+bool CSubNet::SanityCheck() const
+{
+    if (!(network.IsIPv4() || network.IsIPv6())) return false;
+
+    for (size_t x = 0; x < network.m_addr.size(); ++x) {
+        if (network.m_addr[x] & ~netmask[x]) return false;
+    }
+
+    return true;
 }
 
 bool operator==(const CSubNet& a, const CSubNet& b)

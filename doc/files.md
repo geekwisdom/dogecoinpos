@@ -8,6 +8,10 @@
 
 - [Multi-wallet environment](#multi-wallet-environment)
 
+  - [Berkeley DB database based wallets](#berkeley-db-database-based-wallets)
+
+  - [SQLite database based wallets](#sqlite-database-based-wallets)
+
 - [GUI settings](#gui-settings)
 
 - [Legacy subdirectories and files](#legacy-subdirectories-and-files)
@@ -50,6 +54,7 @@ Subdirectory       | File(s)               | Description
 `indexes/blockfilter/basic/db/` | LevelDB database      | Blockfilter index LevelDB database for the basic filtertype; *optional*, used if `-blockfilterindex=basic`
 `indexes/blockfilter/basic/`    | `fltrNNNNN.dat`<sup>[\[2\]](#note2)</sup> | Blockfilter index filters for the basic filtertype; *optional*, used if `-blockfilterindex=basic`
 `wallets/`         |                       | [Contains wallets](#multi-wallet-environment); can be specified by `-walletdir` option; if `wallets/` subdirectory does not exist, wallets reside in the [data directory](#data-directory-location)
+`./`               | `anchors.dat`         | Anchor IP address database, created on shutdown and deleted at startup. Anchors are last known outgoing block-relay-only peers that are tried to re-connect to on startup
 `./`               | `banlist.dat`         | Stores the IPs/subnets of banned nodes
 `./`               | `bitcoin.conf`        | User-defined [configuration settings](bitcoin-conf.md) for `bitcoind` or `bitcoin-qt`. File is not written to by the software and must be created manually. Path can be specified by `-conf` option
 `./`               | `bitcoind.pid`        | Stores the process ID (PID) of `bitcoind` or `bitcoin-qt` while running; created at start and deleted on shutdown; can be specified by `-pid` option
@@ -66,24 +71,35 @@ Subdirectory       | File(s)               | Description
 
 ## Multi-wallet environment
 
-Wallets are Berkeley DB (BDB) databases:
+Wallets are Berkeley DB (BDB) or SQLite databases.
 
-Subdirectory | File(s)           | Description
--------------|-------------------|------------
-`database/`  | BDB logging files | Part of BDB environment; created at start and deleted on shutdown; a user *must keep it as safe* as personal wallet `wallet.dat`
-`./`         | `db.log`          | BDB error file
-`./`         | `wallet.dat`      | Personal wallet (BDB) with keys and transactions
-`./`         | `.walletlock`     | Wallet lock file
-
-1. Each user-defined wallet named "wallet_name" resides in `wallets/wallet_name/` subdirectory.
+1. Each user-defined wallet named "wallet_name" resides in the `wallets/wallet_name/` subdirectory.
 
 2. The default (unnamed) wallet resides in `wallets/` subdirectory; if the latter does not exist, the wallet resides in the data directory.
 
-3. A wallet database path can be specified by `-wallet` option.
+3. A wallet database path can be specified with the `-wallet` option.
 
 4. `wallet.dat` files must not be shared across different node instances, as that can result in key-reuse and double-spends due the lack of synchronization between instances.
 
 5. Any copy or backup of the wallet should be done through a `backupwallet` call in order to update and lock the wallet, preventing any file corruption caused by updates during the copy.
+
+
+### Berkeley DB database based wallets
+
+Subdirectory | File(s)           | Description
+-------------|-------------------|-------------
+`database/`  | BDB logging files | Part of BDB environment; created at start and deleted on shutdown; a user *must keep it as safe* as personal wallet `wallet.dat`
+`./`         | `db.log`          | BDB error file
+`./`         | `wallet.dat`      | Personal wallet (a BDB database) with keys and transactions
+`./`         | `.walletlock`     | BDB wallet lock file
+
+### SQLite database based wallets
+
+Subdirectory | File                 | Description
+-------------|----------------------|-------------
+`./`         | `wallet.dat`         | Personal wallet (a SQLite database) with keys and transactions
+`./`         | `wallet.dat-journal` | SQLite Rollback Journal file for `wallet.dat`. Usually created at start and deleted on shutdown. A user *must keep it as safe* as the `wallet.dat` file.
+
 
 ## GUI settings
 
