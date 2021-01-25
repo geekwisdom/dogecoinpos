@@ -96,8 +96,8 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nStartTime = 1199145601; // January 1, 2008
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1230767999; // December 31, 2008
 
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000025441d95cb16f423"); //block 128654
-        consensus.defaultAssumeValid = uint256S("0xb8a8fd8f3a8cbab7f1d2e5d431eab19610ec83d4f6e421f87fa238b1d91e2f92"); //block 128654
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000074e123470d6bcaa7c"); //block 236,425
+        consensus.defaultAssumeValid = uint256S("0xf24b2bc2f0476da8a42042610524991c66871ae065dac162b47de60ac379f934"); //block 236,425
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -151,15 +151,16 @@ public:
                 { 50000, uint256S("0x9f1a7b15917cbe23bb5dff82e60da8147820c58dea65793be72506c8e6d22b23")},
                 { 87231, uint256S("0xb0836f48bbcf0e675e9957bdc9a73acee32acb50eb6380719d5348df5509ba02")},
                 { 112802,uint256S("0x622a541f3292d61d8e6ee1d0288a98f8ec6fabbc25e14f7fa33540f1fa65b97a")},
-                { 128654,uint256S("0xb8a8fd8f3a8cbab7f1d2e5d431eab19610ec83d4f6e421f87fa238b1d91e2f92")}
+                { 128654,uint256S("0xb8a8fd8f3a8cbab7f1d2e5d431eab19610ec83d4f6e421f87fa238b1d91e2f92")},
+                { 236425,uint256S("0xf24b2bc2f0476da8a42042610524991c66871ae065dac162b47de60ac379f934")}
             }
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 128653 b8a8fd8f3a8cbab7f1d2e5d431eab19610ec83d4f6e421f87fa238b1d91e2f92
-            /* nTime    */ 1592298384,
-            /* nTxCount */ 269970,
-            /* dTxRate  */ 0.06961917921120889,
+            // Data from RPC: getchaintxstats 236424 f24b2bc2f0476da8a42042610524991c66871ae065dac162b47de60ac379f934
+            /* nTime    */ 1611563280,
+            /* nTxCount */ 516550,
+            /* dTxRate  */ 0.02232039498717982,
         };
     }
 };
