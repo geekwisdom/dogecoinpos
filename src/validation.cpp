@@ -28,6 +28,7 @@
 #include <policy/settings.h>
 #include <pow.h>
 #include <pos.h>
+#include <miner.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <random.h>
@@ -573,7 +574,9 @@ bool MemPoolAccept::PreChecks(ATMPArgs& args, Workspace& ws)
     CAmount& nConflictingFees = ws.m_conflicting_fees;
     size_t& nConflictingSize = ws.m_conflicting_size;
 
-    if (!CheckTransaction(tx, state)) {
+    bool fColdStakingActive = ::ChainActive().Height() >= Params().GetConsensus().BPSColdStakeEnableHeight;
+
+    if (!CheckTransaction(tx, state, fColdStakingActive)) {
         return false; // state filled in by CheckTransaction
     }
 
@@ -2125,7 +2128,7 @@ bool CheckReward(const CBlock& block, BlockValidationState& state, int nHeight, 
         // Check proof-of-work reward
         CAmount blockReward = nFees + GetBlockSubsidy(nHeight, consensusParams);
         if (block.vtx[offset]->GetValueOut() > blockReward) {
-            LogPrintf("CheckReward(): coinbase pays too much (actual=%d vs limit=%d)", block.vtx[offset]->GetValueOut(), blockReward);
+            LogPrintf("CheckReward(): coinbase pays too much (actual=%d vs limit=%d)\n", block.vtx[offset]->GetValueOut(), blockReward);
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cb-amount");
         }
     }
@@ -2134,43 +2137,121 @@ bool CheckReward(const CBlock& block, BlockValidationState& state, int nHeight, 
         // Check full reward
         CAmount blockReward = nFees + GetBlockSubsidy(nHeight, consensusParams);
         if (nActualStakeReward > blockReward) {
-            LogPrintf("CheckReward(): coinstake pays too much (actual=%d vs limit=%d)", nActualStakeReward, blockReward);
+            LogPrintf("CheckReward(): coinstake pays too much (actual=%d vs limit=%d)\n", nActualStakeReward, blockReward);
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-amount");
         }
 
+        bool isColdStake = block.vtx[1]->HasP2CSOutputs();
         // The first proof-of-stake blocks get full reward, the rest of them are split between recipients
         int rewardRecipients = 1;
         int nPrevHeight = nHeight -1;
-        if (nPrevHeight >= consensusParams.nFirstMPoSBlock)
+        if (nPrevHeight >= consensusParams.nFirstMPoSBlock && nPrevHeight <= consensusParams.nLastMPoSBlock)
             rewardRecipients = consensusParams.nMPoSRewardRecipients;
+        else if (isColdStake)
+            rewardRecipients = 2;
 
         // Check reward recipients number
         if (rewardRecipients < 1)
             return error("CheckReward(): invalid reward recipients");
 
         //if only 1 then no MPoS logic required
-        if (rewardRecipients == 1){
+        if (rewardRecipients == 1)
             return true;
-        }
 
-        // Generate the list of script recipients including all of their parameters
-        std::vector<CScript> mposScriptList;
-        if (!GetMPoSOutputScripts(mposScriptList, nPrevHeight, consensusParams))
-            return error("CheckReward(): cannot create the list of MPoS output scripts");
+        if (isColdStake)
+        {
+            // The cold stake is the second output
+            const CTxOut& cold_stake_tx = block.vtx[1]->vout[1];
 
-        std::vector<CTxOut> vTempVouts = block.vtx[offset]->vout;
-        CAmount splitReward = blockReward / rewardRecipients;
-        for(size_t i = 0; i < mposScriptList.size(); i++){
-            std::vector<CTxOut>::iterator it=std::find(vTempVouts.begin(), vTempVouts.end(), CTxOut(splitReward,mposScriptList[i]));
-            if(it==vTempVouts.end()){
-                LogPrintf("CheckReward(): A MPoS participant was not properly paid");
-                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-mpos-missing");
-            }else{
-                vTempVouts.erase(it);
+            // Get the staker public key
+            std::vector<valtype> vSolutions;
+            CScript coldStakerScriptPubKey;
+            auto whichType = Solver(cold_stake_tx.scriptPubKey, vSolutions);
+
+            if (whichType != TxoutType::COLDSTAKE)
+                return false;
+
+            // The reward the staker received
+            CAmount nStakerCredit = 0;
+            // Check all outputs and add the amounts sent to the staker
+            for (unsigned int i = 1; i < block.vtx[1]->vout.size(); i++)
+            {
+                if (block.vtx[1]->vout[i].scriptPubKey != block.vtx[1]->vout[1].scriptPubKey)
+                {
+                    nStakerCredit += block.vtx[1]->vout[i].nValue;
+                }
+            }
+
+            int cold_staker_fee_factor = std::max(std::min(COLD_STAKER_FEE, 100), 0);
+            // If the staker got more than the COLD_STAKER_FEE percentage, reject
+            if (nStakerCredit != (blockReward * cold_staker_fee_factor) / 100)
+            {
+                LogPrintf("CheckReward(): staker reward is invalid\n");
+                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-coldstaking-staker-reward");
             }
         }
+        else
+        {
+            // Generate the list of script recipients including all of their parameters
+            std::vector<CScript> mposScriptList;
+            if (!GetMPoSOutputScripts(mposScriptList, nPrevHeight, consensusParams))
+            {
+                LogPrintf("CheckReward(): cannot create the list of MPoS output scripts\n");
+                return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-mpos");
+            }
 
-        vTempVouts.clear();
+            std::vector<CTxOut> vTempVouts = block.vtx[offset]->vout;
+            CAmount splitReward = blockReward / rewardRecipients;
+            for(size_t i = 0; i < mposScriptList.size(); i++)
+            {
+                std::vector<CTxOut>::iterator it=std::find(vTempVouts.begin(), vTempVouts.end(), CTxOut(splitReward,mposScriptList[i]));
+                if(it==vTempVouts.end())
+                {
+                    LogPrintf("CheckReward(): A MPoS participant was not properly paid\n");
+                    return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-cs-mpos-missing");
+                }
+                else
+                {
+                    vTempVouts.erase(it);
+                }
+            }
+
+            vTempVouts.clear();
+        }
+    }
+
+    return true;
+}
+
+bool CheckColdStakeOutputs(const CBlock& block)
+{
+    // If the block has cold stake outputs check that these are to the right recipients
+    if (block.vtx[1]->HasP2CSOutputs())
+    {
+        // The cold stake is the second output
+        const CTxOut& cold_stake_tx = block.vtx[1]->vout[1];
+
+        // Get the staker public key
+        std::vector<valtype> vSolutions;
+        CScript coldStakerScriptPubKey;
+        auto whichType = Solver(cold_stake_tx.scriptPubKey, vSolutions);
+
+        if (whichType != TxoutType::COLDSTAKE)
+            return false;
+
+        // Check all outputs; all should belong to the coldstake owner except one
+        // which will go to the cold staker
+        bool foundStakerOutput = false;
+        for (unsigned int i = 2; i < block.vtx[1]->vout.size(); i++)
+        {
+            if (block.vtx[1]->vout[i].scriptPubKey != cold_stake_tx.scriptPubKey)
+            {
+                // An output had already been found
+                if (foundStakerOutput)
+                    return false;
+                foundStakerOutput = true;
+            }
+        }
     }
 
     return true;
@@ -2197,7 +2278,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
 
     // We recheck the hardened checkpoints here since ContextualCheckBlock(Header) is not called in ConnectBlock.
     if(fCheckpointsEnabled && !Checkpoints::CheckHardened(pindex->nHeight, block.GetHash(), chainparams.Checkpoints())) {
-        LogPrintf("%s: expected hardened checkpoint at height %d", __func__, pindex->nHeight);
+        LogPrintf("%s: expected hardened checkpoint at height %d\n", __func__, pindex->nHeight);
         return state.Invalid(BlockValidationResult::BLOCK_CHECKPOINT, "bad-fork-hardened-checkpoint");
     }
 
@@ -2501,7 +2582,7 @@ bool CChainState::ConnectBlock(const CBlock& block, BlockValidationState& state,
     if (pindex->nHeight > 5000 && !Params().MineBlocksOnDemand()) {
         //sanity check in case an exploit happens that allows new coins to be minted
         if(pindex->nMoneySupply > (uint64_t)(100000000 + ((pindex->nHeight - 5000) * 4)) * COIN){
-            LogPrintf("ConnectBlock(): Unknown error caused actual money supply to exceed expected money supply");
+            LogPrintf("ConnectBlock(): Unknown error caused actual money supply to exceed expected money supply\n");
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "incorrect-money-supply");
         }
     }
@@ -3746,6 +3827,15 @@ bool GetBlockPublicKey(const CBlock& block, std::vector<unsigned char>& vchPubKe
             return false;
         return true;
     }
+    else if (whichType == TxoutType::COLDSTAKE)
+    {
+        // Get the public key from the P2CS input
+        const CTxIn& txin = block.vtx[1]->vin[0];
+        int start = 1 + (int) *txin.scriptSig.begin(); // skip sig
+        start += 1 + (int) *(txin.scriptSig.begin()+start); // skip flag
+        vchPubKey = std::vector<unsigned char>(txin.scriptSig.begin()+start+1, txin.scriptSig.end());
+        return true;
+    }
 
     return false;
 }
@@ -3853,11 +3943,20 @@ bool CheckBlock(const CBlock& block, BlockValidationState& state, const Consensu
     if (fCheckSig && !CheckBlockSignature(block))
         return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-blk-signature", "bad proof-of-stake block signature");
 
+    bool fColdStakingActive = ::ChainActive().Height() >= consensusParams.BPSColdStakeEnableHeight;
+
+    // Check cold-stake outputs are not abused
+    if (fColdStakingActive && block.IsProofOfStake()) {
+        if (!CheckColdStakeOutputs(block)) {
+            return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-p2cs-outs", "invalid cold-stake output");
+        }
+    }
+
     // Check transactions
     // Must check for duplicate inputs (see CVE-2018-17144)
     for (const auto& tx : block.vtx) {
         TxValidationState tx_state;
-        if (!CheckTransaction(*tx, tx_state)) {
+        if (!CheckTransaction(*tx, tx_state, fColdStakingActive)) {
             // CheckBlock() does context-free validation checks. The only
             // possible failures are consensus failures.
             assert(tx_state.GetResult() == TxValidationResult::TX_CONSENSUS);

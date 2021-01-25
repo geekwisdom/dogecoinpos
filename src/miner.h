@@ -26,7 +26,11 @@ namespace Consensus { struct Params; }
 
 static const bool DEFAULT_PRINTPRIORITY = false;
 
+//! Default for -staking
 static const bool DEFAULT_STAKE = true;
+
+//! Default for -coldstaking
+static const bool DEFAULT_COLDSTAKING = true;
 
 static const bool DEFAULT_STAKE_CACHE = true;
 
@@ -41,6 +45,9 @@ static const int32_t STAKER_POLLING_PERIOD = 5000;
 
 //How much time to spend trying to process transactions when using the generate RPC call
 static const int32_t POW_MINER_MAX_TIME = 60;
+
+//When staking delegations, what percent of the reward goes to the staker
+static const int32_t COLD_STAKER_FEE = 7;
 
 struct CBlockTemplate
 {

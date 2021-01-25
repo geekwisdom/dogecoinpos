@@ -214,6 +214,16 @@ QString BitcoinUnits::getAmountColumnTitle(int unit)
     return amountTitle;
 }
 
+QString BitcoinUnits::getDelegatedColumnTitle(int unit)
+{
+    QString amountTitle = QObject::tr("Delegated");
+    if (BitcoinUnits::valid(unit))
+    {
+        amountTitle += " ("+BitcoinUnits::shortName(unit) + ")";
+    }
+    return amountTitle;
+}
+
 QString BitcoinUnits::formatInt(const int64_t &nIn, bool fPlus, BitcoinUnits::SeparatorStyle separators)
 {
     qint64 n = (qint64)nIn;

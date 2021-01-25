@@ -184,7 +184,7 @@ bool WalletModel::validateAddress(const QString &address)
     return IsValidDestinationString(address.toStdString());
 }
 
-WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl)
+WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransaction &transaction, const CCoinControl& coinControl, const bool fIncludeDelegated)
 {
     CAmount total = 0;
     bool fSubtractFeeFromAmount = false;
@@ -216,7 +216,46 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
             setAddress.insert(rcp.address);
             ++nAddresses;
 
-            CScript scriptPubKey = GetScriptForDestination(DecodeDestination(rcp.address.toStdString()));
+            CScript scriptPubKey;
+            CTxDestination out = DecodeDestination(rcp.address.toStdString());
+
+            if (rcp.isP2CS) {
+                Destination ownerAdd;
+                if (rcp.ownerAddress.isEmpty()) {
+                    return InvalidAddress;
+                } else {
+                    ownerAdd = Destination(DecodeDestination(rcp.ownerAddress.toStdString()), false);
+                }
+
+                const PKHash* stakerId = boost::get<PKHash>(&out);
+                const PKHash* ownerId = boost::get<PKHash>(&ownerAdd.dest);
+                if (!stakerId || !ownerId) {
+                    return InvalidAddress;
+                }
+
+                LegacyScriptPubKeyMan* spk_man = m_wallet->wallet()->GetLegacyScriptPubKeyMan();
+                if (!spk_man) {
+                    spk_man = m_wallet->wallet()->GetOrCreateLegacyScriptPubKeyMan();
+                }
+
+                if (!spk_man) {
+                    return InvalidAddress;
+                }
+
+                if (spk_man->HaveKey(ToKeyID(*stakerId))) {
+                    return StakerAddressInWallet;
+                }
+
+                if (!spk_man->HaveKey(ToKeyID(*ownerId))) {
+                    return OwnerAddressNotInWallet;
+                }
+
+                scriptPubKey = GetScriptForStakeDelegation(ToKeyID(*stakerId), ToKeyID(*ownerId));
+            } else {
+                // Regular P2PK or P2PKH
+                scriptPubKey = GetScriptForDestination(out);
+            }
+
             CRecipient recipient = {scriptPubKey, rcp.amount, rcp.fSubtractFeeFromAmount};
             vecSend.push_back(recipient);
 
@@ -228,7 +267,7 @@ WalletModel::SendCoinsReturn WalletModel::prepareTransaction(WalletModelTransact
         return DuplicateAddress;
     }
 
-    CAmount nBalance = m_wallet->getAvailableBalance(coinControl);
+    CAmount nBalance = m_wallet->getAvailableBalance(coinControl, fIncludeDelegated);
 
     if(total > nBalance)
     {
@@ -302,7 +341,7 @@ WalletModel::SendCoinsReturn WalletModel::sendCoins(WalletModelTransaction &tran
                 if (!m_wallet->getAddress(
                      dest, &name, /* is_mine= */ nullptr, /* purpose= */ nullptr))
                 {
-                    m_wallet->setAddressBook(dest, strLabel, "send");
+                    m_wallet->setAddressBook(dest, strLabel, AddressBook::AddressBookPurpose::SEND);
                 }
                 else if (name != strLabel)
                 {

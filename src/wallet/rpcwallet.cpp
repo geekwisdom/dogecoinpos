@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <addressbook.h>
 #include <amount.h>
 #include <core_io.h>
 #include <interfaces/chain.h>
@@ -369,9 +370,9 @@ static RPCHelpMan setlabel()
     std::string label = LabelFromValue(request.params[1]);
 
     if (pwallet->IsMine(dest)) {
-        pwallet->SetAddressBook(dest, label, "receive");
+        pwallet->SetAddressBook(dest, label, AddressBook::AddressBookPurpose::RECEIVE);
     } else {
-        pwallet->SetAddressBook(dest, label, "send");
+        pwallet->SetAddressBook(dest, label, AddressBook::AddressBookPurpose::SEND);
     }
 
     return NullUniValue;
@@ -542,6 +543,131 @@ static RPCHelpMan sendtoaddress()
     };
 }
 
+UniValue CreateColdStakeDelegation(const UniValue& params, CWallet* const pwallet)
+{
+    LOCK2(cs_main, pwallet->cs_wallet);
+
+    if (pwallet->GetLastBlockHeight() < Params().GetConsensus().BPSColdStakeEnableHeight) {
+        throw JSONRPCError(RPC_WALLET_ERROR, strprintf("Cold Staking is enabled at block %d\n", Params().GetConsensus().BPSColdStakeEnableHeight));
+    }
+
+    // Get Staking Address
+    std::string stakerAddressStr = params[0].get_str();
+    CTxDestination stakeAddr = DecodeDestination(stakerAddressStr);
+    if (!IsValidDestination(stakeAddr))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid BitcoinPoS address");
+
+    PKHash* stakeKey = boost::get<PKHash>(&stakeAddr);
+    if (!stakeKey)
+        throw JSONRPCError(RPC_WALLET_ERROR, "Unable to get stake pubkey hash from address");
+
+    LegacyScriptPubKeyMan& spk_man = EnsureLegacyScriptPubKeyMan(*pwallet, true);
+    if (spk_man.HaveKey(ToKeyID(*stakeKey))) {
+        std::string errMsg = strprintf("The provided staker_address \"%s\" is present in this wallet.\n", params[0].get_str());
+        errMsg += "You can already stake the coins, there is no need to delegate them to yourself.";
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, errMsg);
+    }
+
+    // Get Amount
+    CAmount nValue = AmountFromValue(params[2]);
+
+    // include already delegated coins
+    bool fIncludeDelegated = false;
+    if (params.size() > 3 && !params[3].isNull())
+        fIncludeDelegated = params[3].get_bool();
+
+    // Check amount
+    CAmount currBalance = pwallet->GetAvailableBalance(nullptr, fIncludeDelegated);
+    if (nValue > currBalance)
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+
+    std::string strError;
+    EnsureWalletIsUnlocked(pwallet);
+
+    // Get Owner Address
+    std::string ownerAddressStr;
+    PKHash* ownerKey;
+    if (params.size() > 1 && !params[1].isNull() && !params[1].get_str().empty()) {
+        CTxDestination dest = DecodeDestination(params[1].get_str());
+        if (!IsValidDestination(dest))
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid BitcoinPoS spending address.");
+        ownerKey = boost::get<PKHash>(&dest);
+        if (!ownerKey)
+            throw JSONRPCError(RPC_WALLET_ERROR, "Unable to get spend pubkey hash from owneraddress.");
+
+        if (!spk_man.HaveKey(ToKeyID(*ownerKey))) {
+            std::string errMsg = strprintf("The provided owneraddress \"%s\" is not present in this wallet.\n", params[1].get_str());
+            errMsg += "WARNING: Only the owner of the key to owneraddress will be allowed to spend these coins after the delegation.";
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, errMsg);
+        }
+        ownerAddressStr = params[1].get_str();
+    } else {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unable to get find owneraddress");
+    }
+
+    // Get P2CS script for addresses
+    CScript scriptPubKey = GetScriptForStakeDelegation(ToKeyID(*stakeKey), ToKeyID(*ownerKey));
+
+    // Create the recipients list
+    std::vector<CRecipient> recipients;
+    recipients.push_back({scriptPubKey, nValue, false});
+
+    // Create the transaction
+    bilingual_str error;
+    CAmount nFeeRequired;
+    int nChangePosRet = -1;
+    CCoinControl coin_control;
+    FeeCalculation fee_calc_out;
+    CTransactionRef tx;
+    if (!pwallet->CreateTransaction(recipients, tx, nFeeRequired, nChangePosRet, error, coin_control, fee_calc_out, !pwallet->IsWalletFlagSet(WALLET_FLAG_DISABLE_PRIVATE_KEYS), fIncludeDelegated)) {
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, error.original);
+    }
+
+    pwallet->CommitTransaction(tx, {}, {});
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("staker_address", stakerAddressStr);
+    result.pushKV("owner_address", ownerAddressStr);
+    result.pushKV("txid", tx->GetHash().GetHex());
+    return result;
+}
+
+static RPCHelpMan delegatestake()
+{
+    return RPCHelpMan{"delegatestake",
+                "\nDelegate an amount to a given address for cold staking. The amount is a real and is rounded to the nearest 0.00000001\n" +
+                HELP_REQUIRING_PASSPHRASE,
+                {
+                    {"staker_address", RPCArg::Type::STR, RPCArg::Optional::NO, "The BitcoinPoS address to delegate to."},
+                    {"owner_address", RPCArg::Type::STR, RPCArg::Optional::NO, "The BitcoinPoS address corresponding to the key that will be able to spend the stake."},
+                    {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::NO, "The amount in " + CURRENCY_UNIT + " to delegate for staking. eg 100"},
+                    {"include_delegated", RPCArg::Type::BOOL, "false", "Include already delegated inputs if needed."},
+                },
+                RPCResult{
+                    RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR, "staker_address", "The cold staker (delegate) staker_address."},
+                        {RPCResult::Type::STR, "owner_address", "The owner (delegator) owneraddress."},
+                        {RPCResult::Type::STR_HEX, "txid", "The stake delegation transaction id."},
+                    },
+                },
+                RPCExamples{
+                HelpExampleCli("delegatestake", "\"4VQ5qC2V4CsyhKfw7GvGVDu7EHGhaF1HHQ\" \"4SHsfHadrKeNj6hCajSeqwjD58QGtKke6f\" 1000")
+                + HelpExampleRpc("delegatestake", "\"4VQ5qC2V4CsyhKfw7GvGVDu7EHGhaF1HHQ\" \"4SHsfHadrKeNj6hCajSeqwjD58QGtKke6f\" 1000")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    if (!wallet) return NullUniValue;
+    CWallet* const pwallet = wallet.get();
+
+    UniValue ret = CreateColdStakeDelegation(request.params, pwallet);
+
+    return ret;
+},
+    };
+}
+
 static RPCHelpMan listaddressgroupings()
 {
     return RPCHelpMan{"listaddressgroupings",
@@ -599,6 +725,78 @@ static RPCHelpMan listaddressgroupings()
         jsonGroupings.push_back(jsonGrouping);
     }
     return jsonGroupings;
+},
+    };
+}
+
+static RPCHelpMan listunspentdelegations()
+{
+    return RPCHelpMan{"listunspentdelegations",
+                "\nList P2CS unspent outputs received by this wallet as cold-staker.\n",
+                {},
+                RPCResult{
+                    RPCResult::Type::ARR, "", "",
+                    {
+                        {RPCResult::Type::OBJ, "", "",
+                        {
+                            {RPCResult::Type::STR, "txid", "The transaction id"},
+                            {RPCResult::Type::NUM, "txidn", "The output number"},
+                            {RPCResult::Type::NUM, "amount", "The amount delegated"},
+                            {RPCResult::Type::NUM, "confirmations", "The number of confirmations"},
+                            {RPCResult::Type::NUM, "staker_address", "The cold staker address"},
+                            {RPCResult::Type::NUM, "owner_address", "The coin owner address"},
+                        }},
+                    }
+                },
+                RPCExamples{
+                HelpExampleCli("listunspentdelegations", "")
+                + HelpExampleRpc("listunspentdelegations", "")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
+    if (!wallet) return NullUniValue;
+    const CWallet* const pwallet = wallet.get();
+
+    UniValue results(UniValue::VARR);
+    {
+        LOCK2(cs_main, pwallet->cs_wallet);
+
+        for (std::map<uint256, CWalletTx>::const_iterator it =
+                pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
+            const uint256& wtxid = it->first;
+            const CWalletTx* pcoin = &(*it).second;
+            if (!CheckFinalTx(*pcoin->tx) || !pcoin->IsTrusted())
+                continue;
+
+            // if this tx has no unspent P2CS outputs for us, skip it
+            if (pcoin->GetColdStakingCredit() == 0 && pcoin->GetStakeDelegationCredit() == 0)
+                continue;
+
+            for (unsigned int i = 0; i < pcoin->tx->vout.size(); i++) {
+                const CTxOut& out = pcoin->tx->vout[i];
+                isminetype mine = pwallet->IsMine(out);
+                bool isSpent =  pwallet->IsSpent(pcoin->tx->GetHash(), i);
+                if ((!bool(mine & ISMINE_COLD) && !bool(mine & ISMINE_SPENDABLE_DELEGATED)) || isSpent)
+                    continue;
+                TxoutType type;
+                std::vector<CTxDestination> addresses;
+                int nRequired;
+                if (!ExtractDestinations(out.scriptPubKey, type, addresses, nRequired))
+                    continue;
+                UniValue entry(UniValue::VOBJ);
+                entry.pushKV("txid", wtxid.GetHex());
+                entry.pushKV("txidn", (int)i);
+                entry.pushKV("amount", ValueFromAmount(out.nValue));
+                entry.pushKV("confirmations", pcoin->GetDepthInMainChain());
+                entry.pushKV("staker-address", EncodeDestination(addresses[0]));
+                entry.pushKV("owner-address", EncodeDestination(addresses[1]));
+                results.push_back(entry);
+            }
+        }
+    }
+
+    return results;
 },
     };
 }
@@ -1030,7 +1228,7 @@ static RPCHelpMan addmultisigaddress()
     // Construct using pay-to-script-hash:
     CScript inner;
     CTxDestination dest = AddAndGetMultisigDestination(required, pubkeys, output_type, spk_man, inner);
-    pwallet->SetAddressBook(dest, label, "send");
+    pwallet->SetAddressBook(dest, label, AddressBook::AddressBookPurpose::SEND);
 
     // Make the descriptor
     std::unique_ptr<Descriptor> descriptor = InferDescriptor(GetScriptForDestination(dest), spk_man);
@@ -1912,7 +2110,7 @@ static RPCHelpMan walletpassphrase()
                 {
                     {"passphrase", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet passphrase"},
                     {"timeout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The time to keep the decryption key in seconds; capped at 100000000 (~3 years)."},
-                    {"staking only", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Unlock wallet for staking only"},
+                    {"stakingonly", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Unlock wallet for staking only"},
                 },
                 RPCResult{RPCResult::Type::NONE, "", ""},
                 RPCExamples{
@@ -2153,59 +2351,6 @@ static RPCHelpMan encryptwallet()
     }
 
     return "wallet encrypted; The keypool has been flushed and a new HD seed was generated (if you are using HD). You need to make a new backup.";
-},
-    };
-}
-
-static RPCHelpMan reservebalance()
-{
-    return RPCHelpMan{"reservebalance",
-            "\nSet reserve amount not participating in network protection."
-            "\nIf no parameters provided current setting is printed.\n",
-            {
-                {"reserve", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED,"is true or false to turn balance reserve on or off."},
-                {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "is a real and rounded to cent."},
-            },
-             RPCResults{},
-             RPCExamples{
-            "\nSet reserve balance to 100\n"
-            + HelpExampleCli("reservebalance", "true 100") +
-            "\nSet reserve balance to 0\n"
-            + HelpExampleCli("reservebalance", "false") +
-            "\nGet reserve balance\n"
-            + HelpExampleCli("reservebalance", "")
-            },
-            [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
-{
-    std::shared_ptr<CWallet> const wallet = GetWalletForJSONRPCRequest(request);
-    if (!wallet) return NullUniValue;
-    CWallet* const pwallet = wallet.get();
-
-    if (request.params.size() > 0)
-    {
-        bool fReserve = request.params[0].get_bool();
-        if (fReserve)
-        {
-            if (request.params.size() == 1)
-                throw std::runtime_error("must provide amount to reserve balance.\n");
-            int64_t nAmount = AmountFromValue(request.params[1]);
-            nAmount = (nAmount / CENT) * CENT;  // round to cent
-            if (nAmount < 0)
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "amount cannot be negative.\n");
-            pwallet->m_reserve_balance = nAmount;
-        }
-        else
-        {
-            if (request.params.size() > 1)
-                throw JSONRPCError(RPC_INVALID_PARAMETER, "cannot specify amount to turn off reserve.\n");
-            pwallet->m_reserve_balance = 0;
-        }
-    }
-
-    UniValue result(UniValue::VOBJ);
-    result.pushKV("reserve", (pwallet->m_reserve_balance > 0));
-    result.pushKV("amount", ValueFromAmount(pwallet->m_reserve_balance));
-    return result;
 },
     };
 }
@@ -2512,9 +2657,18 @@ static RPCHelpMan getwalletinfo()
                         {RPCResult::Type::NUM, "walletversion", "the wallet version"},
                         {RPCResult::Type::STR, "format", "the database format (bdb or sqlite)"},
                         {RPCResult::Type::STR_AMOUNT, "balance", "DEPRECATED. Identical to getbalances().mine.trusted"},
-                        {RPCResult::Type::STR_AMOUNT, "stake", "the total stake balance of the wallet in " + CURRENCY_UNIT},
                         {RPCResult::Type::STR_AMOUNT, "unconfirmed_balance", "DEPRECATED. Identical to getbalances().mine.untrusted_pending"},
                         {RPCResult::Type::STR_AMOUNT, "immature_balance", "DEPRECATED. Identical to getbalances().mine.immature"},
+                        {RPCResult::Type::STR_AMOUNT, "stake", "the total stake balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "stakeable", "the total stakeable balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "immature_stakeable", "the total immature stakeable balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "stakeable_delegations", "the total stakeable balance from delegations in the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "immature_stakeable_delegations", "the total immature stakeable balance from delegations in the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "cold_stake", "the total cold stake balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "immature_cold_stake", "the total immature cold stake balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "delegated", "the total delegated balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "immature_delegated", "the total immature delegated balance of the wallet in " + CURRENCY_UNIT},
+                        {RPCResult::Type::STR_AMOUNT, "total", "the total balance of the wallet in " + CURRENCY_UNIT},
                         {RPCResult::Type::NUM, "txcount", "the total number of transactions in the wallet"},
                         {RPCResult::Type::NUM_TIME, "keypoololdest", "the " + UNIX_EPOCH_TIME + " of the oldest pre-generated key in the key pool. Legacy wallets only."},
                         {RPCResult::Type::NUM, "keypoolsize", "how many new keys are pre-generated (only counts external keys)"},
@@ -2557,11 +2711,18 @@ static RPCHelpMan getwalletinfo()
     obj.pushKV("walletversion", pwallet->GetVersion());
     obj.pushKV("format", pwallet->GetDatabase().Format());
     obj.pushKV("balance", ValueFromAmount(bal.m_mine_trusted));
+    obj.pushKV("unconfirmed_balance", ValueFromAmount(bal.m_mine_untrusted_pending));
+    obj.pushKV("immature_balance", ValueFromAmount(bal.m_mine_immature));
     obj.pushKV("stake", ValueFromAmount(bal.m_mine_stake));
     obj.pushKV("stakeable", ValueFromAmount(bal.m_mine_stakeable));
     obj.pushKV("immature_stakeable", ValueFromAmount(bal.m_mine_immature_stakeable));
-    obj.pushKV("unconfirmed_balance", ValueFromAmount(bal.m_mine_untrusted_pending));
-    obj.pushKV("immature_balance", ValueFromAmount(bal.m_mine_immature));
+    obj.pushKV("stakeable_delegations", ValueFromAmount(bal.m_mine_stakeable_delegations));
+    obj.pushKV("immature_stakeable_delegations", ValueFromAmount(bal.m_mine_immature_stakeable_delegations));
+    obj.pushKV("cold_stake", ValueFromAmount(bal.m_mine_cold_stake));
+    obj.pushKV("immature_cold_stake", ValueFromAmount(bal.m_mine_immature_cold_stake));
+    obj.pushKV("delegated", ValueFromAmount(bal.m_mine_delegated));
+    obj.pushKV("immature_delegated", ValueFromAmount(bal.m_mine_immature_delegated));
+    obj.pushKV("total", ValueFromAmount(bal.m_mine_trusted + bal.m_mine_untrusted_pending + bal.m_mine_immature + bal.m_mine_delegated));
     obj.pushKV("txcount",       (int)pwallet->mapWallet.size());
     if (kp_oldest > 0) {
         obj.pushKV("keypoololdest", kp_oldest);
@@ -3052,7 +3213,7 @@ static RPCHelpMan listunspent()
         cctl.m_min_depth = nMinDepth;
         cctl.m_max_depth = nMaxDepth;
         LOCK(pwallet->cs_wallet);
-        pwallet->AvailableCoins(vecOutputs, !include_unsafe, &cctl, nMinimumAmount, nMaximumAmount, nMinimumSumAmount, nMaximumCount);
+        pwallet->AvailableCoins(vecOutputs, !include_unsafe, &cctl, true, false, nMinimumAmount, nMaximumAmount, nMinimumSumAmount, nMaximumCount);
     }
 
     LOCK(pwallet->cs_wallet);
@@ -3837,7 +3998,7 @@ static UniValue DescribeWalletAddress(const CWallet* const pwallet, const CTxDes
 }
 
 /** Convert CAddressBookData to JSON record.  */
-static UniValue AddressBookDataToJSON(const CAddressBookData& data, const bool verbose)
+static UniValue AddressBookDataToJSON(const AddressBook::CAddressBookData& data, const bool verbose)
 {
     UniValue ret(UniValue::VOBJ);
     if (verbose) {
@@ -3926,7 +4087,7 @@ RPCHelpMan getaddressinfo()
     isminetype mine = pwallet->IsMine(dest);
     ret.pushKV("ismine", bool(mine & ISMINE_SPENDABLE));
 
-    bool solvable = provider && IsSolvable(*provider, scriptPubKey);
+    bool solvable = provider && IsSolvable(*provider, scriptPubKey, mine == ISMINE_COLD);
     ret.pushKV("solvable", solvable);
 
     if (solvable) {
@@ -4002,7 +4163,7 @@ static RPCHelpMan getaddressesbylabel()
     // Find all addresses that have the given label
     UniValue ret(UniValue::VOBJ);
     std::set<std::string> addresses;
-    for (const std::pair<const CTxDestination, CAddressBookData>& item : pwallet->m_address_book) {
+    for (const std::pair<const CTxDestination, AddressBook::CAddressBookData>& item : pwallet->m_address_book) {
         if (item.second.IsChange()) continue;
         if (item.second.GetLabel() == label) {
             std::string address = EncodeDestination(item.first);
@@ -4066,7 +4227,7 @@ static RPCHelpMan listlabels()
 
     // Add to a set to sort by label name, then insert into Univalue array
     std::set<std::string> label_set;
-    for (const std::pair<const CTxDestination, CAddressBookData>& entry : pwallet->m_address_book) {
+    for (const std::pair<const CTxDestination, AddressBook::CAddressBookData>& entry : pwallet->m_address_book) {
         if (entry.second.IsChange()) continue;
         if (purpose.empty() || entry.second.purpose == purpose) {
             label_set.insert(entry.second.GetLabel());
@@ -4640,6 +4801,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "importwallet",                     &importwallet,                  {"filename"} },
     { "wallet",             "keypoolrefill",                    &keypoolrefill,                 {"newsize"} },
     { "wallet",             "listaddressgroupings",             &listaddressgroupings,          {} },
+    { "wallet",             "listunspentdelegations",           &listunspentdelegations,        {} },
     { "wallet",             "listlabels",                       &listlabels,                    {"purpose"} },
     { "wallet",             "listlockunspent",                  &listlockunspent,               {} },
     { "wallet",             "listreceivedbyaddress",            &listreceivedbyaddress,         {"minconf","include_empty","include_watchonly","address_filter"} },
@@ -4656,6 +4818,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "send",                             &send,                          {"outputs","conf_target","estimate_mode","fee_rate","options"} },
     { "wallet",             "sendmany",                         &sendmany,                      {"dummy","amounts","minconf","comment","subtractfeefrom","replaceable","conf_target","estimate_mode","fee_rate","verbose"} },
     { "wallet",             "sendtoaddress",                    &sendtoaddress,                 {"address","amount","comment","comment_to","subtractfeefromamount","replaceable","conf_target","estimate_mode","avoid_reuse","fee_rate","verbose"} },
+    { "wallet",             "delegatestake",                    &delegatestake,                 {"staker_address", "owner_address", "amount", "include_delegated"} },
     { "wallet",             "sethdseed",                        &sethdseed,                     {"newkeypool","seed"} },
     { "wallet",             "setlabel",                         &setlabel,                      {"address","label"} },
     { "wallet",             "settxfee",                         &settxfee,                      {"amount"} },
@@ -4669,7 +4832,6 @@ static const CRPCCommand commands[] =
     { "wallet",             "walletpassphrase",                 &walletpassphrase,              {"passphrase","timeout", "stakingonly"} },
     { "wallet",             "walletpassphrasechange",           &walletpassphrasechange,        {"oldpassphrase","newpassphrase"} },
     { "wallet",             "walletprocesspsbt",                &walletprocesspsbt,             {"psbt","sign","sighashtype","bip32derivs"} },
-    { "wallet",             "reservebalance",                   &reservebalance,                {"reserve", "amount"} },
 };
 // clang-format on
     return MakeSpan(commands);

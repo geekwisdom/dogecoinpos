@@ -1004,6 +1004,8 @@ bool LoadMempool(CTxMemPool& pool);
 
 bool CheckReward(const CBlock& block, BlockValidationState& state, int nHeight, const Consensus::Params& consensusParams, CAmount nFees, CAmount nActualStakeReward, const std::vector<CTxOut>& vouts);
 
+bool CheckColdStakeOutputs(const CBlock& block);
+
 bool RemoveStateBlockIndex(CBlockIndex *pindex);
 
 bool GetBlockPublicKey(const CBlock& block, std::vector<unsigned char>& vchPubKey);

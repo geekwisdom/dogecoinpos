@@ -83,6 +83,10 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     // Highlight transaction after send
     connect(sendCoinsPage, &SendCoinsDialog::coinsSent, transactionView, static_cast<void (TransactionView::*)(const uint256&)>(&TransactionView::focusTransaction));
 
+    connect(stakePage, &StakePage::coinsSent, this, &WalletView::coinsSent);
+    // Highlight transaction after delegate
+    connect(stakePage, &StakePage::coinsSent, transactionView, static_cast<void (TransactionView::*)(const uint256&)>(&TransactionView::focusTransaction));
+
     // Clicking on "Export" allows to export the transaction list
     connect(exportButton, &QPushButton::clicked, transactionView, &TransactionView::exportClicked);
 
@@ -90,6 +94,8 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     connect(sendCoinsPage, &SendCoinsDialog::message, this, &WalletView::message);
     // Pass through messages from transactionView
     connect(transactionView, &TransactionView::message, this, &WalletView::message);
+    // Pass through messages from sendCoinsPage
+    connect(stakePage, &StakePage::message, this, &WalletView::message);
 
     connect(this, &WalletView::setPrivacy, overviewPage, &OverviewPage::setPrivacy);
 }
@@ -320,7 +326,7 @@ void WalletView::unlockWallet(bool fromMenu)
         dlg.setModel(walletModel);
         dlg.exec();
 
-        if(sender() == stakePage)
+        if (sender() == stakePage)
             stakePage->updateEncryptionStatus();
     }
 }

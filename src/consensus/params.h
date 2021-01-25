@@ -73,6 +73,9 @@ struct Params {
     /** Block height at which BPSDiffAdj becomes active - difficulty adjustment
      * formula is changed so that block times are more reliable. */
     int BPSDiffAdjHeight;
+    /** Block height at which BPSColdStakeEnable becomes active - cold staking
+     * will be enabled, allowing wallets to use delegations for staking. */
+    int BPSColdStakeEnableHeight;
     /**
      * Minimum blocks including miner confirmation of the total of 2016 blocks in a retargeting period,
      * (nPowTargetTimespan / nPowTargetSpacing) which is also used for BIP9 deployments.
@@ -107,6 +110,7 @@ struct Params {
     bool fPoSNoRetargeting;
     int nLastPOWBlock;
     int nFirstMPoSBlock;
+    int nLastMPoSBlock;
     int nMPoSRewardRecipients;
     int nEnableHeaderSignatureHeight;
     /** Block sync-checkpoint span*/

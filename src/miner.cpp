@@ -588,24 +588,23 @@ void ThreadStakeMiner(CWallet *pwallet, CConnman* connman, ChainstateManager* ch
             }
         }
         //
-        // Create new block
+        // Select the suitable coins
         //
-        CAmount nBalance = pwallet->GetBalance().m_mine_trusted;
-        CAmount nTargetValue = nBalance - pwallet->m_reserve_balance;
-        CAmount nValueIn = 0;
-
         if (chainTipForCoins != ::ChainActive().Tip()->GetBlockHash()) {
             int64_t start_time = GetTimeMillis();
             LogPrint(BCLog::COINSTAKE, "Chain tip changed since previous coin selection, selecting new coins for staking...\n");
             LOCK(pwallet->cs_wallet);
             setCoins.clear();
             chainTipForCoins = ::ChainActive().Tip()->GetBlockHash();
-            pwallet->SelectCoinsForStaking(nTargetValue, setCoins, nValueIn);
+            pwallet->SelectCoinsForStaking(setCoins);
             LogPrint(BCLog::COINSTAKE, "Selecting coins for staking completed in %15dms\n", GetTimeMillis() - start_time);
         } else {
             LogPrint(BCLog::COINSTAKE, "Chain tip unchanged since previous coin selection, using previously selected coins...\n");
         }
 
+        //
+        // Create new block
+        //
         if (setCoins.size() > 0)
         {
             int64_t nTotalFees = 0;

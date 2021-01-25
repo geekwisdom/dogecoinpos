@@ -1,4 +1,4 @@
-// Copyright (c) 2011-2018 The Bitcoin Core developers
+// Copyright (c) 2011-2020 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,6 +6,7 @@
 #define BITCOIN_QT_STAKEPAGE_H
 
 #include <interfaces/wallet.h>
+#include <qt/sendcoinsdialog.h>
 
 #include <QWidget>
 #include <memory>
@@ -43,7 +44,8 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void requireUnlock(bool fromMenu);
-
+    void coinsSent(const uint256& txid);
+    void message(const QString &title, const QString &message, unsigned int style);
 
 private:
     Ui::StakePage *ui;
@@ -51,6 +53,9 @@ private:
     WalletModel *walletModel;
     const PlatformStyle* const platformStyle;
     TransactionView* transactionView;
+    TransactionView* receivedDelegationsView;
+    TransactionView* myDelegationsView;
+    SendCoinsDialog* sendCoinsDialog;
     interfaces::WalletBalances m_balances;
     int64_t m_subsidy;
     uint64_t m_networkWeight;
@@ -59,6 +64,8 @@ private:
 private Q_SLOTS:
     void updateDisplayUnit();
     void on_checkStake_clicked(bool checked);
+    void on_newAddressButton_clicked();
+    void coldStakerControlFeaturesChanged(bool);
 
 private:
     void updateSubsidy();

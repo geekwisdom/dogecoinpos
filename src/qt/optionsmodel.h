@@ -59,13 +59,13 @@ public:
         ThirdPartyTxUrls,       // QString
         Language,               // QString
         CoinControlFeatures,    // bool
+        ColdStakerControlFeatures, //bool
         ThreadsScriptVerif,     // int
         Prune,                  // bool
         PruneSize,              // int
         DatabaseCache,          // int
         SpendZeroConfChange,    // bool
         Listen,                 // bool
-        ReserveBalance,         // CAmount
         OptionIDRowCount,
     };
 
@@ -85,6 +85,7 @@ public:
     int getDisplayUnit() const { return nDisplayUnit; }
     QString getThirdPartyTxUrls() const { return strThirdPartyTxUrls; }
     bool getCoinControlFeatures() const { return fCoinControlFeatures; }
+    bool getColdStakerControlFeatures() const { return fColdStakerControlFeatures; }
     const QString& getOverriddenByCommandLine() { return strOverriddenByCommandLine; }
 
     /* Explicit setters */
@@ -108,6 +109,7 @@ private:
     int nDisplayUnit;
     QString strThirdPartyTxUrls;
     bool fCoinControlFeatures;
+    bool fColdStakerControlFeatures;
     /* settings that were overridden by command-line */
     QString strOverriddenByCommandLine;
 
@@ -119,6 +121,7 @@ private:
 Q_SIGNALS:
     void displayUnitChanged(int unit);
     void coinControlFeaturesChanged(bool);
+    void coldStakerControlFeaturesChanged(bool);
     void hideTrayIconChanged(bool);
 };
 

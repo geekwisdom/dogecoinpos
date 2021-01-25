@@ -203,8 +203,8 @@ bool CheckRecoveredPubKeyFromBlockSignature(CBlockIndex* pindexPrev, const CBloc
 
             CTxDestination address;
             TxoutType txType=TxoutType::NONSTANDARD;
-            if(ExtractDestination(coinPrev.out.scriptPubKey, address, &txType)){
-                if ((txType == TxoutType::PUBKEY || txType == TxoutType::PUBKEYHASH) && address.type() == typeid(PKHash)) {
+            if(ExtractDestination(coinPrev.out.scriptPubKey, address, &txType, true)){
+                if ((txType == TxoutType::PUBKEY || txType == TxoutType::PUBKEYHASH || txType == TxoutType::COLDSTAKE) && address.type() == typeid(PKHash)) {
                     if(PKHash(pubkey.GetID()) == boost::get<PKHash>(address)) {
                         return true;
                     }

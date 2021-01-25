@@ -216,6 +216,7 @@ RES_ICONS = \
   qt/res/icons/tx_input.png \
   qt/res/icons/tx_output.png \
   qt/res/icons/tx_mined.png \
+  qt/res/icons/tx_cold.png \
   qt/res/icons/warning.png \
   qt/res/icons/staking_on.png \
   qt/res/icons/staking_off.png \

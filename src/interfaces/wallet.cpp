@@ -360,12 +360,17 @@ public:
         result.stake = bal.m_mine_stake;
         result.stakeable = bal.m_mine_stakeable;
         result.immature_stakeable = bal.m_mine_immature_stakeable;
+        result.stakeable_delegations = bal.m_mine_stakeable_delegations;
+        result.immature_stakeable_delegations = bal.m_mine_immature_stakeable_delegations;
+        result.cold_stake = bal.m_mine_cold_stake;
+        result.immature_cold_stake = bal.m_mine_immature_cold_stake;
+        result.delegated = bal.m_mine_delegated;
+        result.immature_delegated = bal.m_mine_immature_delegated;
         result.have_watch_only = haveWatchOnly();
         if (result.have_watch_only) {
             result.watch_only_balance = bal.m_watchonly_trusted;
             result.unconfirmed_watch_only_balance = bal.m_watchonly_untrusted_pending;
             result.immature_watch_only_balance = bal.m_watchonly_immature;
-            result.watch_only_stake = bal.m_watchonly_stake;
         }
         return result;
     }
@@ -380,9 +385,9 @@ public:
         return true;
     }
     CAmount getBalance() override { return m_wallet->GetBalance().m_mine_trusted; }
-    CAmount getAvailableBalance(const CCoinControl& coin_control) override
+    CAmount getAvailableBalance(const CCoinControl& coin_control, bool fIncludeDelegated) override
     {
-        return m_wallet->GetAvailableBalance(&coin_control);
+        return m_wallet->GetAvailableBalance(&coin_control, fIncludeDelegated);
     }
     isminetype txinIsMine(const CTxIn& txin) override
     {
