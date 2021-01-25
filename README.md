@@ -33,7 +33,7 @@ Development Process
 -------------------
 
 The `master` branch is regularly built (see `doc/build-*.md` for instructions) and tested, but it is not guaranteed to be
-completely stable. [Tags](https://github.com/bitcoin-pos/bitcoin-pos/tags) are created
+completely stable. [Tags](https://github.com/bitcoinpos/bitcoinpos/tags) are created
 regularly from release branches to indicate new official, stable release versions of Bitcoin PoS Core.
 
 The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md)

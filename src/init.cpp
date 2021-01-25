@@ -602,7 +602,7 @@ void SetupServerArgs(NodeContext& node)
 
 std::string LicenseInfo()
 {
-    const std::string URL_SOURCE_CODE = "<https://github.com/bitcoin-pos/bitcoin-pos>";
+    const std::string URL_SOURCE_CODE = "<https://github.com/bitcoinpos/bitcoinpos>";
 
     return CopyrightHolders(strprintf(_("Copyright (C) %i").translated, COPYRIGHT_YEAR) + " ") + "\n" +
            "\n" +
