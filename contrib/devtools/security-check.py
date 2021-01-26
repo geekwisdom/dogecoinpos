@@ -195,12 +195,14 @@ def check_ELF_separate_code(executable):
 def get_PE_dll_characteristics(executable) -> int:
     '''Get PE DllCharacteristics bits'''
     stdout = run_command([OBJDUMP_CMD, '-x',  executable])
-
+    global ARCH
     bits = 0
     for line in stdout.splitlines():
         tokens = line.split()
         if len(tokens)>=2 and tokens[0] == 'DllCharacteristics':
             bits = int(tokens[1],16)
+        if len(tokens)>=2 and tokens[0] == 'architecture:':
+            ARCH = tokens[1].rstrip(',')            
     return bits
 
 IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA = 0x0020
@@ -217,7 +219,13 @@ def check_PE_DYNAMIC_BASE(executable) -> bool:
 def check_PE_HIGH_ENTROPY_VA(executable) -> bool:
     '''PIE: DllCharacteristics bit 0x20 signifies high-entropy ASLR'''
     bits = get_PE_dll_characteristics(executable)
-    return (bits & IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA) == IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA
+
+    if ARCH == 'i386:x86-64': 
+        reqbits = IMAGE_DLL_CHARACTERISTICS_HIGH_ENTROPY_VA
+    else: # Unnecessary on 32-bit
+        assert(ARCH == 'i386')
+        reqbits = 0
+    return (bits & reqbits) == reqbits    
 
 def check_PE_RELOC_SECTION(executable) -> bool:
     '''Check for a reloc section. This is required for functional ASLR.'''
