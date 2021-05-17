@@ -1,68 +1,69 @@
-Bitcoin PoS Core integration/staging tree
+Dogecoin PoS Core integration/staging tree
 =====================================
 
-[Bitcoin Proof of Stake](https://www.bitcoinpos.net)
+# Dogecoin Core [DOGE, Ð]
 
-What is Bitcoin PoS?
+![Dogecoin](https://static.tumblr.com/ppdj5y9/Ae9mxmxtp/300coin.png)
+
+Dogecoin is a cryptocurrency like Bitcoin, although it does not use SHA256 as
+its proof of work (POW). Taking development cues from Tenebrix and Litecoin,
+Dogecoin currently employs a simplified variant of scrypt.
+- **Website:** [dogecoin.com.](https://dogecoin.com)
+
+[Dogecoin Proof of Stake](https://blog.geekwisdom.org/)
+
+What is Dogecoin PoS?
 ----------------
 
-[Bitcoin PoS](https://www.bitcoinpos.net) is an digital currency that enables instant payments to
-anyone, anywhere in the world. Bitcoin PoS uses peer-to-peer technology to operate
+[Dogecoin PoS](https://dogecoin.com/) is a fork of Bitcoin POS as a proof of concept
+staking mechanism for Dogecoin. Dogecoin PoS uses peer-to-peer technology to operate
 with no central authority: managing transactions and issuing money are carried
-out collectively by the network. Bitcoin PoS Core is the name of open source
+out collectively by the network. Dogecoin PoS Core is the name of open source
 software which enables the use of this currency.
 
-Bitcoin PoS Core is built on top of Bitcoin Core. The difference between the two
-is the consensus algorithm: Bitcoin PoS Core uses Proof of Stake consensus, whilst
-Bitcoin Core uses Proof of Work. Using Proof of Stake as a consensus algorithm is
+Dogecoin PoS Core is built on top of Dogecoin Core. The difference between the two
+is the consensus algorithm: Dogecoin PoS Core uses Proof of Stake consensus, whilst
+Dogecoin Core uses Proof of Work. Using Proof of Stake as a consensus algorithm is
 allowing it not only to scale better and be orders of magnitude more efficient in
 terms of power consumption, but it is also lowering the entry barrier for contributing
 to the creation of new blocks.
 
-For more information, as well as an immediately usable, binary version of
-the Bitcoin PoS Core software, see https://www.bitcoinpos.net/#wallet-bps, or read the
-[original whitepaper](https://www.bitcoinpos.net/WhitePaperBPS.pdf).
 
-License
--------
+## License – Much license ⚖️
+Dogecoin PoS is released under the terms of the MIT license. See
+[COPYING](COPYING) for more information or see
+[opensource.org](https://opensource.org/licenses/MIT)
 
-Bitcoin PoS Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/licenses/MIT.
+## Development and contributions – omg developers
+Development is ongoing, and the development team, as well as other volunteers,
+can freely work in their own trees and submit pull requests when features or
+bug fixes are ready.
 
-Development Process
--------------------
+#### Version strategy
+Version numbers are following ```major.minor.patch``` semantics.
 
-The `master` branch is regularly built (see `doc/build-*.md` for instructions) and tested, but it is not guaranteed to be
-completely stable. [Tags](https://github.com/bitcoinpos/bitcoinpos/tags) are created
-regularly from release branches to indicate new official, stable release versions of Bitcoin PoS Core.
-
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md)
-and useful hints for developers can be found in [doc/developer-notes.md](doc/developer-notes.md).
-
-Testing
--------
-
-Testing and code review is the bottleneck for development; we get more pull
-requests than we can review and test on short notice. Please be patient and help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
-
-### Automated Testing
+#### Contributions ✍️
 
 Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
 submit new unit tests for old code. Unit tests can be compiled and run
 (assuming they weren't disabled in configure) with: `make check`. Further details on running
 and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
 
-There are also [regression and integration tests](/test), written
+There are also [regression and integration tests](/qa) of the RPC interface, written
 in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
-
-The Travis CI system makes sure that every pull request is built for Windows, Linux, and macOS, and that unit/sanity tests are run automatically.
-
-### Manual Quality Assurance (QA) Testing
+These tests can be run (if the [test dependencies](/qa) are installed) with: `qa/pull-tester/rpc-tests.py`
 
 Changes should be tested by somebody other than the developer who wrote the
 code. This is especially important for large or high-risk changes. It is useful
 to add a test plan to the pull request description if testing the changes is
 not straightforward.
+
+**testnet and regtest modes**
+
+Run with the `-testnet` option to run with "play dogecoins" on the test network, if you
+are testing multi-machine code that needs to operate across the internet.
+
+If you are testing something that can run on one machine, run with the `-regtest` option.
+In regression test mode, blocks can be created on-demand; see qa/rpc-tests/ for tests
+that run in `-regtest` mode.
+
