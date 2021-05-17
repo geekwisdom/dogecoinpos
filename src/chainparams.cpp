@@ -108,7 +108,7 @@ public:
         pchMessageStart[1] = 0xf1;
         pchMessageStart[2] = 0x2c;
         pchMessageStart[3] = 0x1e;
-        nDefaultPort = 48930;
+        nDefaultPort = 22556;
         nPruneAfterHeight = 100000;
         m_assumed_blockchain_size = 2;
         m_assumed_chain_state_size = 1;
@@ -220,7 +220,7 @@ public:
         pchMessageStart[1] = 0x1f;
         pchMessageStart[2] = 0x35;
         pchMessageStart[3] = 0x29;
-        nDefaultPort = 48932;
+        nDefaultPort = 44556;
         nPruneAfterHeight = 1000;
         m_assumed_blockchain_size = 40;
         m_assumed_chain_state_size = 2;
@@ -348,7 +348,7 @@ public:
         uint256 hash = h.GetHash();
         memcpy(pchMessageStart, hash.begin(), 4);
 
-        nDefaultPort = 38333;
+        nDefaultPort = 18444;
         nPruneAfterHeight = 1000;
 
         genesis = CreateGenesisBlock(1598918400, 52613770, 0x1e0377ae, 1, 50 * COIN);
