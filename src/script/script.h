@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2021-2022 GeekWisdom.org / Brad Detchevery
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -176,14 +177,15 @@ enum opcodetype
     OP_NOP8 = 0xb7,
     OP_NOP9 = 0xb8,
     OP_NOP10 = 0xb9,
-
-
+ // Opcode added by BIP 342 (Tapscript)
+    OP_CHECKSIGADD = 0xba,
     // template matching params
     OP_SMALLINTEGER = 0xfa,
     OP_PUBKEYS = 0xfb,
     OP_PUBKEYHASH = 0xfd,
     OP_PUBKEY = 0xfe,
-
+  // cold staking
+    OP_CHECKCOLDSTAKEVERIFY = 0xe1,
     OP_INVALIDOPCODE = 0xff,
 };
 
@@ -620,6 +622,7 @@ public:
     unsigned int GetSigOpCount(const CScript& scriptSig) const;
 
     bool IsPayToScriptHash() const;
+    bool IsPayToColdStaking() const;
     bool IsPayToWitnessScriptHash() const;
     bool IsWitnessProgram(int& version, std::vector<unsigned char>& program) const;
 

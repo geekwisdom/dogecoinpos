@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2016 The Bitcoin Core developers
+// Copyright (c) 2021-2022 GeekWisdom.org /Brad Detchevery
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -140,6 +141,11 @@ const char* GetOpName(opcodetype opcode)
     case OP_NOP8                   : return "OP_NOP8";
     case OP_NOP9                   : return "OP_NOP9";
     case OP_NOP10                  : return "OP_NOP10";
+   // Opcode added by BIP 342 (Tapscript)
+    case OP_CHECKSIGADD            : return "OP_CHECKSIGADD";
+    
+    // cold staking
+    case OP_CHECKCOLDSTAKEVERIFY   : return "OP_CHECKCOLDSTAKEVERIFY";
 
     case OP_INVALIDOPCODE          : return "OP_INVALIDOPCODE";
 
@@ -209,6 +215,19 @@ bool CScript::IsPayToScriptHash() const
             (*this)[1] == 0x14 &&
             (*this)[22] == OP_EQUAL);
 }
+
+bool CScript::IsPayToColdStaking() const
+{
+    // Extra-fast test for pay-to-cold-staking CScripts:
+    return (this->size() == 51 &&
+            (*this)[2] == OP_ROT &&
+            (*this)[4] == OP_CHECKCOLDSTAKEVERIFY &&
+            (*this)[5] == 0x14 &&
+            (*this)[27] == 0x14 &&
+            (*this)[49] == OP_EQUALVERIFY &&
+            (*this)[50] == OP_CHECKSIG);
+}
+
 
 bool CScript::IsPayToWitnessScriptHash() const
 {
